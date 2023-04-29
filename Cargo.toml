@@ -1,0 +1,17 @@
+[package]
+name = "aleparser"
+version = "0.1.0"
+edition = "2021"
+
+[profile.dev]
+opt-level = 3
+
+[profile.release]
+opt-level = 3 
+
+[dependencies]
+aleph-syntax-tree = { path = "../../../aleph-syntax-tree" }
+rust-sitter = "0.1.2"
+
+[build-dependencies]
+rust-sitter-tool = "0.1.2"
