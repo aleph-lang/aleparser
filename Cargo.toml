@@ -10,7 +10,7 @@ opt-level = 3
 opt-level = 3 
 
 [dependencies]
-aleph-syntax-tree = { path = "../../../aleph-syntax-tree" }
+aleph-syntax-tree = { git = "ssh://git@github.com/aleph-lang/aleph-syntax-tree.git" }
 rust-sitter = "0.1.2"
 
 [build-dependencies]
