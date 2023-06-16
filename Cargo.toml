@@ -1,6 +1,6 @@
 [package]
 name = "aleparser"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 
 [profile.dev]
@@ -9,9 +9,10 @@ opt-level = 3
 [profile.release]
 opt-level = 3 
 
-[dependencies]
-aleph-syntax-tree = { git = "ssh://git@github.com/aleph-lang/aleph-syntax-tree.git" }
-rust-sitter = "0.1.2"
-
 [build-dependencies]
-rust-sitter-tool = "0.1.2"
+lalrpop = { version = "0.20", features = ["lexer"] }
+
+[dependencies]
+lalrpop-util = {version = "0.20", features = ["lexer"]}
+regex = "1"
+aleph-syntax-tree = { git = "ssh://git@github.com/aleph-lang/aleph-syntax-tree.git" }

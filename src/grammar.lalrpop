@@ -1,0 +1,126 @@
+use aleph_syntax_tree::syntax::AlephTree as at;
+
+grammar;
+
+pub Stmts = {
+    Expr,
+    <stmts:Stmts> ";" => stmts,
+    <stmts:Stmts> ";" <e:Expr> => at::Stmts{expr1: Box::new(stmts), expr2: Box::new(e)}
+}
+
+Elems: Vec<Box<at>> = {
+    <e:Expr> => vec![Box::new(e)],
+    <mut el:Elems> "," <e:Expr> => {
+        el.push(Box::new(e));
+        el
+    }
+}
+
+Expr = {
+    #[precedence(level="0")]
+    Term,
+    #[precedence(level="4")]
+    "(" <init:Expr>";" <condition:Expr> ";" <post:Expr> ")" "?" "*" "{" <then:Stmts> "}" => at::While{init_expr: Box::new(init), condition: Box::new(condition), loop_expr: Box::new(then), post_expr: Box::new(post)},
+    #[precedence(level="4")] #[assoc(side="left")]
+    <left:Expr> "-" <right:Expr> => at::Sub{number_expr1:Box::new(left), number_expr2:Box::new(right)},
+    #[precedence(level="4")] #[assoc(side="left")]
+    <left:Expr> "+" <right:Expr> => at::Add{number_expr1:Box::new(left), number_expr2:Box::new(right)},
+    #[precedence(level="4")]
+    <condition:Expr> "?" "{" <then:Stmts> "}" => at::If{condition: Box::new(condition), then: Box::new(then), els: Box::new(at::Unit)},
+    #[precedence(level="4")]
+    <condition:Expr> "?" "{" <then:Stmts> "}" ":" "{" <els:Stmts> "}" => at::If{condition: Box::new(condition), then: Box::new(then), els: Box::new(els)},
+    #[precedence(level="4")]
+    <condition:Expr> "?" "*" "{" <then:Stmts> "}" => at::While{init_expr: Box::new(at::Unit), condition: Box::new(condition), loop_expr: Box::new(then), post_expr: Box::new(at::Unit)},
+    #[precedence(level="3")] #[assoc(side="right")]
+    <left:Expr> "=" <right:Expr> => match left {
+        at::Get{array_name, elem} => at::Put{array_name: array_name, elem: elem, value: Box::new(right), insert: "false".to_string()},
+        at::Put{array_name, elem, value: _value, insert} => at::Put{array_name: array_name, elem: elem, value: Box::new(right), insert: insert},
+        _ => at::Let{var: left.to_string_value(), is_pointer: "false".to_string(), value: Box::new(right), expr: Box::new(at::Unit)},
+    },
+    #[precedence(level="3")] #[assoc(side="right")]
+    <left:Ident> ":" "=" <right:Expr> => at::Let{var: left.to_string_value(), is_pointer: "true".to_string(), value: Box::new(right), expr: Box::new(at::Unit)},
+    #[precedence(level="3")]
+    "return" <e:Expr> => at::Return{value: Box::new(e)},
+    #[precedence(level="2")] #[assoc(side="left")]
+    <left:Expr> "|" <right:Expr> => at::Or{bool_expr1:Box::new(left), bool_expr2:Box::new(right)},
+    #[precedence(level="1")] #[assoc(side="left")]
+    <left:Expr> "*" <right:Expr> => at::Mul{number_expr1:Box::new(left), number_expr2:Box::new(right)},
+    #[precedence(level="1")] #[assoc(side="left")]
+    <left:Expr> "/" <right:Expr> => at::Div{number_expr1:Box::new(left), number_expr2:Box::new(right)},
+    #[precedence(level="1")] #[assoc(side="left")]
+    <left:Expr> "&" <right:Expr> => at::And{bool_expr1:Box::new(left), bool_expr2:Box::new(right)},
+    #[precedence(level="1")] #[assoc(side="left")]
+    <left:Expr> "==" <right:Expr> => at::Eq{expr1: Box::new(left), expr2: Box::new(right)},
+    #[precedence(level="1")] #[assoc(side="left")]
+    <left:Expr> "<=" <right:Expr> => at::LE{expr1: Box::new(left), expr2: Box::new(right)},
+    #[precedence(level="1")] #[assoc(side="left")]
+    <left:Expr> "<" <right:Expr> => at::Not{bool_expr: Box::new(at::LE{expr1: Box::new(right), expr2: Box::new(left)})},
+    #[precedence(level="1")] #[assoc(side="left")]
+    <left:Expr> ">=" <right:Expr> => at::LE{expr1: Box::new(right), expr2: Box::new(left)},
+    #[precedence(level="1")] #[assoc(side="left")]
+    <left:Expr> ">" <right:Expr> => at::Not{bool_expr: Box::new(at::LE{expr1: Box::new(left), expr2: Box::new(right)})},
+    #[precedence(level="1")] #[assoc(side="left")]
+    <left:Expr> "in" <right:Expr> => at::In{expr1: Box::new(left), expr2: Box::new(right)},
+    "import" <import:Term> => at::Iprt{name: import.to_string_value()},
+    "class" <name:Ident> "{" <body:Stmts> "}" => at::Clss{name: name.to_string_value(), attribute_list: Vec::new(), body: Box::new(body)},
+    <name:Ident> "(" ")" => at::App{object_name: "".to_string(), fun: Box::new(name), param_list: Vec::new()},
+    <name:Ident> "(" <elems:Elems> ")" => at::App{object_name: "".to_string(), fun: Box::new(name), param_list: elems},
+    <cname: Ident> "." <name:Ident> "(" ")" => at::App{object_name: cname.to_string_value(), fun: Box::new(name), param_list: Vec::new()},
+    <cname: Ident> "." <name:Ident> "(" <elems:Elems> ")" => at::App{object_name: cname.to_string_value(), fun: Box::new(name), param_list: elems},
+    "fun" <name:Ident> "(" ")" "=" "{" <body:Stmts> "}" => at::LetRec{name: name.to_string_value(), args: Vec::new(), body: Box::new(body)},
+    "fun" <name:Ident> "(" <elems:Elems> ")" "=" "{" <body:Stmts> "}" => at::LetRec{name: name.to_string_value(), args: elems, body: Box::new(body)},
+    <name:Ident> "[" "/" <key:Expr> "]" => at::Remove{array_name: name.to_string_value(), elem: Box::new(key), is_value: "false".to_string()},
+    "match" <e:Expr> "with" <match_list:MatchList> => at::Match{expr: Box::new(e), case_list: match_list},
+    <condition:Expr> <message:String> => at::Assert{condition: Box::new(condition), message: Box::new(message)},
+}
+
+Term = {
+    Num,
+    String,
+    Ident,
+    Comment,
+    CommentLine,
+    "(" <e:Expr> ")" => e,
+    "-" <right:Term> => at::Neg{expr:Box::new(right)},
+    "!" <right:Term> => at::Not{bool_expr: Box::new(right)},
+    <name:Ident> "[" <key:LeftAdd> "]" => match key { 
+        (k,true) => at::Put{array_name: name.to_string_value(), elem: Box::new(k), value: Box::new(at::Unit), insert: "true".to_string()},
+        (k,_) => match k {
+            at::Neg{expr} => at::Remove{array_name: name.to_string_value(), elem: expr, is_value: "true".to_string()},
+            _ => at::Get{array_name: name.to_string_value(), elem: Box::new(k)},
+        },
+    },
+    "[" <el:Elems> "]" => at::Array{elems: el},
+    "[" "]" => at::Array{elems: Vec::new()},
+    "|" <ident:Ident> "|" => at::Length{var: ident.to_string_value()},
+}
+
+Num: at = r"[0-9]+(\.[0-9]+){0,1}" => match <>.to_string() {
+    f if f.contains(".") => at::Float{value: f},
+    i => at::Int{value: i}
+};
+Ident: at = r"[a-z](\d|[A-Za-z]|_)*" => match <> {
+    "true" | "false" => at::Bool{value: <>.to_string()},
+    _ => at::String{value: <>.to_string()},
+};
+String: at = r#""[^\"]*""# => at::String{value: <>.to_string()};
+Comment : at = r#"/\*([^\*/]*)\*/"# => at::CommentMulti{value: <>.to_string()};
+CommentLine : at = r#"//([^\n]*)\n"# => at::Comment{value: <>.to_string()};
+
+LeftAdd:(at, bool) = {
+    <left:Expr> => (left, false),
+    <left:Expr> "+" => (left, true),
+}
+
+MatchLine = {
+    Ident,
+    ":" <left:Term> "-" ">" <right:Term> ":" => at::MatchLine{condition: Box::new(left), case_expr: Box::new(right)},
+}
+
+MatchList: Vec<Box<at>> = {
+    <MatchLine> => vec![Box::new(<>)],
+    <mut el:MatchList> <e:MatchLine> => {
+        el.push(Box::new(e));
+        el
+    }
+}
