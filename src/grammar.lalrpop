@@ -101,7 +101,7 @@ Num: at = r"[0-9]+(\.[0-9]+){0,1}" => match <>.to_string() {
 };
 Ident: at = r"[a-z](\d|[A-Za-z]|_)*" => match <> {
     "true" | "false" => at::Bool{value: <>.to_string()},
-    _ => at::String{value: <>.to_string()},
+    _ => at::Ident{value: <>.to_string()},
 };
 String: at = r#""[^\"]*""# => at::String{value: <>.to_string()};
 Comment : at = r#"/\*([^\*/]*)\*/"# => at::CommentMulti{value: <>.to_string()};
