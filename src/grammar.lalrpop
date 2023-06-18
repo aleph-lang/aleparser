@@ -3,17 +3,27 @@ use aleph_syntax_tree::syntax::AlephTree as at;
 grammar;
 
 pub Stmts = {
-    Expr,
+    Let,
     <stmts:Stmts> ";" => stmts,
-    <stmts:Stmts> ";" <e:Expr> => at::Stmts{expr1: Box::new(stmts), expr2: Box::new(e)}
+    <stmts:Stmts> ";" <e:Let> => at::Stmts{expr1: Box::new(stmts), expr2: Box::new(e)}
 }
 
 Elems: Vec<Box<at>> = {
-    <e:Expr> => vec![Box::new(e)],
-    <mut el:Elems> "," <e:Expr> => {
+    <e:Let> => vec![Box::new(e)],
+    <mut el:Elems> "," <e:Let> => {
         el.push(Box::new(e));
         el
     }
+}
+
+Let = {
+    Expr, 
+    <left:Expr> "=" <right:Expr> => match left {
+        at::Get{array_name, elem} => at::Put{array_name: array_name, elem: elem, value: Box::new(right), insert: "false".to_string()},
+        at::Put{array_name, elem, value: _value, insert} => at::Put{array_name: array_name, elem: elem, value: Box::new(right), insert: insert},
+        _ => at::Let{var: left.to_string_value(), is_pointer: "false".to_string(), value: Box::new(right), expr: Box::new(at::Unit)},
+    },
+    <left:Ident> ":" "=" <right:Expr> => at::Let{var: left.to_string_value(), is_pointer: "true".to_string(), value: Box::new(right), expr: Box::new(at::Unit)},
 }
 
 Expr = {
@@ -31,14 +41,6 @@ Expr = {
     <condition:Expr> "?" "{" <then:Stmts> "}" ":" "{" <els:Stmts> "}" => at::If{condition: Box::new(condition), then: Box::new(then), els: Box::new(els)},
     #[precedence(level="4")]
     <condition:Expr> "?" "*" "{" <then:Stmts> "}" => at::While{init_expr: Box::new(at::Unit), condition: Box::new(condition), loop_expr: Box::new(then), post_expr: Box::new(at::Unit)},
-    #[precedence(level="3")] #[assoc(side="right")]
-    <left:Expr> "=" <right:Expr> => match left {
-        at::Get{array_name, elem} => at::Put{array_name: array_name, elem: elem, value: Box::new(right), insert: "false".to_string()},
-        at::Put{array_name, elem, value: _value, insert} => at::Put{array_name: array_name, elem: elem, value: Box::new(right), insert: insert},
-        _ => at::Let{var: left.to_string_value(), is_pointer: "false".to_string(), value: Box::new(right), expr: Box::new(at::Unit)},
-    },
-    #[precedence(level="3")] #[assoc(side="right")]
-    <left:Ident> ":" "=" <right:Expr> => at::Let{var: left.to_string_value(), is_pointer: "true".to_string(), value: Box::new(right), expr: Box::new(at::Unit)},
     #[precedence(level="3")]
     "return" <e:Expr> => at::Return{value: Box::new(e)},
     #[precedence(level="2")] #[assoc(side="left")]
