@@ -63,7 +63,7 @@ Expr = {
     <left:Expr> ">" <right:Expr> => at::Not{bool_expr: Box::new(at::LE{expr1: Box::new(left), expr2: Box::new(right)})},
     #[precedence(level="1")] #[assoc(side="left")]
     <left:Expr> "in" <right:Expr> => at::In{expr1: Box::new(left), expr2: Box::new(right)},
-    "import" <import:Term> => at::Iprt{name: import.to_string_value()},
+    "import" <import:Term> => at::Iprt{name: import.to_string_value(),items: Vec::new()},
     "class" <name:Ident> "{" <body:Stmts> "}" => at::Clss{name: name.to_string_value(), attribute_list: Vec::new(), body: Box::new(body)},
     <name:Ident> "(" ")" => at::App{object_name: "".to_string(), fun: Box::new(name), param_list: Vec::new()},
     <name:Ident> "(" <elems:Elems> ")" => at::App{object_name: "".to_string(), fun: Box::new(name), param_list: elems},
