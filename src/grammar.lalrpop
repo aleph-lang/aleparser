@@ -17,13 +17,33 @@ Elems: Vec<Box<at>> = {
 }
 
 Let = {
-    Expr, 
+    Expr,
     <left:Expr> "=" <right:Expr> => match left {
         at::Get{array_name, elem} => at::Put{array_name: array_name, elem: elem, value: Box::new(right), insert: "false".to_string()},
         at::Put{array_name, elem, value: _value, insert} => at::Put{array_name: array_name, elem: elem, value: Box::new(right), insert: insert},
         _ => at::Let{var: left.to_string_value(), is_pointer: "false".to_string(), value: Box::new(right), expr: Box::new(at::Unit)},
     },
     <left:Ident> ":" "=" <right:Expr> => at::Let{var: left.to_string_value(), is_pointer: "true".to_string(), value: Box::new(right), expr: Box::new(at::Unit)},
+    // ── Cognitive Layer ───────────────────────────────────────────────────
+    // CogExpr (Term + App calls, no operators) keeps these rules unambiguous.
+    "intention" <name:Ident> "(" ")" "=" "{" <body:Stmts> "}"
+        => at::Intend{name: name.to_string_value(), params: Vec::new(), body: Box::new(body)},
+    "intention" <name:Ident> "(" <params:Elems> ")" "=" "{" <body:Stmts> "}"
+        => at::Intend{name: name.to_string_value(), params: params, body: Box::new(body)},
+    "suggest" <var:Ident> "from" <ctx:CogExpr>
+        => at::Suggest{var: var.to_string_value(), context: Box::new(ctx), options: Vec::new(), fallback: None},
+    "act" <intention:CogExpr>
+        => at::Act{intention: Box::new(intention), effect: None},
+    "act" <intention:CogExpr> "as" <eff:Ident>
+        => at::Act{intention: Box::new(intention), effect: Some(Box::new(eff))},
+    "remember" <key:String> "=" <val:CogExpr>
+        => at::Remember{key: Box::new(key), value: Box::new(val), ttl: None},
+    "remember" <key:String> "=" <val:CogExpr> "for" <ttl:CogExpr>
+        => at::Remember{key: Box::new(key), value: Box::new(val), ttl: Some(Box::new(ttl))},
+    "perceive" <src:CogExpr>
+        => at::Perceive{source: Box::new(src), pattern: None, var: None},
+    "perceive" <src:CogExpr> "as" <var:Ident>
+        => at::Perceive{source: Box::new(src), pattern: None, var: Some(var.to_string_value())},
 }
 
 Expr = {
@@ -76,6 +96,16 @@ Expr = {
     <condition:Expr> <message:String> => at::Assert{condition: Box::new(condition), message: Box::new(message)},
 }
 
+// Term + function calls, no operators.
+// Used by cognitive rules to avoid shift-reduce conflicts with Expr operators.
+CogExpr = {
+    Term,
+    <name:Ident> "(" ")" => at::App{object_name: "".to_string(), fun: Box::new(name), param_list: Vec::new()},
+    <name:Ident> "(" <elems:Elems> ")" => at::App{object_name: "".to_string(), fun: Box::new(name), param_list: elems},
+    <cname:Ident> "." <name:Ident> "(" ")" => at::App{object_name: cname.to_string_value(), fun: Box::new(name), param_list: Vec::new()},
+    <cname:Ident> "." <name:Ident> "(" <elems:Elems> ")" => at::App{object_name: cname.to_string_value(), fun: Box::new(name), param_list: elems},
+}
+
 Term = {
     Num,
     String,
@@ -85,7 +115,7 @@ Term = {
     "(" <e:Expr> ")" => e,
     "-" <right:Term> => at::Neg{expr:Box::new(right)},
     "!" <right:Term> => at::Not{bool_expr: Box::new(right)},
-    <name:Ident> "[" <key:LeftAdd> "]" => match key { 
+    <name:Ident> "[" <key:LeftAdd> "]" => match key {
         (k,true) => at::Put{array_name: name.to_string_value(), elem: Box::new(k), value: Box::new(at::Unit), insert: "true".to_string()},
         (k,_) => match k {
             at::Neg{expr} => at::Remove{array_name: name.to_string_value(), elem: expr, is_value: "true".to_string()},
