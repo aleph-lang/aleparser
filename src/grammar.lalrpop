@@ -1,5 +1,6 @@
 use aleph_syntax_tree::syntax::AlephTree as at;
 use aleph_syntax_tree::types::{Type, Variant};
+use aleph_syntax_tree::effects::{Effect, EffectSet};
 
 grammar;
 
@@ -29,6 +30,29 @@ Let = {
     // separator would otherwise conflict with Expr's "|" (Or) operator — same
     // reasoning as CogExpr below.
     "type" <name:UpperIdent> "=" <variants:VariantList> => at::TypeDef{name, variants},
+    // Kept out of Expr for the same reason as TypeDef above: these two
+    // productions contain a literal "|" token (return type | effect list),
+    // which would collide with Expr's own "|" (Or) precedence-macro rule.
+    "fun" <name:Ident> "(" ")" "->" <ret:TypeExpr> "|" <effs:EffectList> "=" "{" <body:Stmts> "}" => at::WithEffects{
+        inner: Box::new(at::Typed{
+            inner: Box::new(at::LetRec{name: name.to_string_value(), args: Vec::new(), body: Box::new(body)}),
+            ty: Type::Fun{params: Vec::new(), ret: Box::new(ret)},
+        }),
+        effects: effs,
+    },
+    "fun" <name:Ident> "(" <params:Params> ")" "->" <ret:TypeExpr> "|" <effs:EffectList> "=" "{" <body:Stmts> "}" => {
+        let param_types: Vec<Type> = params.iter().map(|p| match &**p {
+            at::Typed{ty, ..} => ty.clone(),
+            _ => Type::Var{name: "_".to_string()},
+        }).collect();
+        at::WithEffects{
+            inner: Box::new(at::Typed{
+                inner: Box::new(at::LetRec{name: name.to_string_value(), args: params, body: Box::new(body)}),
+                ty: Type::Fun{params: param_types, ret: Box::new(ret)},
+            }),
+            effects: effs,
+        }
+    },
     // ── Cognitive Layer ───────────────────────────────────────────────────
     // CogExpr (Term + App calls, no operators) keeps these rules unambiguous.
     "intention" <name:Ident> "(" ")" "=" "{" <body:Stmts> "}"
@@ -95,7 +119,21 @@ Expr = {
     <cname: Ident> "." <name:Ident> "(" ")" => at::App{object_name: cname.to_string_value(), fun: Box::new(name), param_list: Vec::new()},
     <cname: Ident> "." <name:Ident> "(" <elems:Elems> ")" => at::App{object_name: cname.to_string_value(), fun: Box::new(name), param_list: elems},
     "fun" <name:Ident> "(" ")" "=" "{" <body:Stmts> "}" => at::LetRec{name: name.to_string_value(), args: Vec::new(), body: Box::new(body)},
-    "fun" <name:Ident> "(" <elems:Elems> ")" "=" "{" <body:Stmts> "}" => at::LetRec{name: name.to_string_value(), args: elems, body: Box::new(body)},
+    "fun" <name:Ident> "(" <params:Params> ")" "=" "{" <body:Stmts> "}" => at::LetRec{name: name.to_string_value(), args: params, body: Box::new(body)},
+    "fun" <name:Ident> "(" ")" "->" <ret:TypeExpr> "=" "{" <body:Stmts> "}" => at::Typed{
+        inner: Box::new(at::LetRec{name: name.to_string_value(), args: Vec::new(), body: Box::new(body)}),
+        ty: Type::Fun{params: Vec::new(), ret: Box::new(ret)},
+    },
+    "fun" <name:Ident> "(" <params:Params> ")" "->" <ret:TypeExpr> "=" "{" <body:Stmts> "}" => {
+        let param_types: Vec<Type> = params.iter().map(|p| match &**p {
+            at::Typed{ty, ..} => ty.clone(),
+            _ => Type::Var{name: "_".to_string()},
+        }).collect();
+        at::Typed{
+            inner: Box::new(at::LetRec{name: name.to_string_value(), args: params, body: Box::new(body)}),
+            ty: Type::Fun{params: param_types, ret: Box::new(ret)},
+        }
+    },
     <name:Ident> "[" "/" <key:Expr> "]" => at::Remove{array_name: name.to_string_value(), elem: Box::new(key), is_value: "false".to_string()},
     "match" <e:Expr> "with" <match_list:MatchList> => at::Match{expr: Box::new(e), case_list: match_list},
     <condition:Expr> <message:String> => at::Assert{condition: Box::new(condition), message: Box::new(message)},
@@ -192,4 +230,35 @@ Variant: Variant = {
 VariantList: Vec<Variant> = {
     <v:Variant> => vec![v],
     <mut vl:VariantList> "|" <v:Variant> => { vl.push(v); vl },
+}
+
+Param: at = {
+    Ident,
+    <name:Ident> ":" <ty:TypeExpr> => at::Typed{inner: Box::new(name), ty},
+}
+
+Params: Vec<Box<at>> = {
+    <p:Param> => vec![Box::new(p)],
+    <mut el:Params> "," <p:Param> => { el.push(Box::new(p)); el },
+}
+
+// "act" is handled as its own alternative (not via the Ident match arm
+// below) because "act" is already a literal keyword token elsewhere in this
+// grammar (the cognitive-layer Act rule) — LALRPOP's lexer always prefers a
+// literal-string token over a same-text regex token, so input "act" lexes
+// as that keyword, never as Ident; the Ident-based match could never see it.
+EffectName: Effect = {
+    <i:Ident> => match i.to_string_value().as_str() {
+        "pure" => Effect::Pure,
+        "io" => Effect::Io,
+        "net" => Effect::Net,
+        "mut" => Effect::Mut,
+        other => panic!("unknown effect '{}'", other),
+    },
+    "act" => Effect::Act,
+};
+
+EffectList: EffectSet = {
+    <e:EffectName> => EffectSet::from([e]),
+    <mut set:EffectList> "," <e:EffectName> => { set.insert(e); set },
 }
