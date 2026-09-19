@@ -164,6 +164,11 @@ MatchList: Vec<Box<at>> = {
 
 UpperIdent: String = r"[A-Z](\d|[A-Za-z]|_)*" => <>.to_string();
 
+// Falls back to Type::Var for anything not a recognized primitive keyword —
+// covers both a genuine type-variable/nominal-type reference (e.g. `Shape`
+// in `fun f(s: Shape)`) and a misspelled/unknown name (e.g. `Itn` instead of
+// `Int`). No type checker exists yet to tell these apart; both parse
+// successfully and are left for a future validation pass.
 TypeExpr: Type = <name:UpperIdent> => match name.as_str() {
     "Int" => Type::Int,
     "Float" => Type::Float,
@@ -171,7 +176,7 @@ TypeExpr: Type = <name:UpperIdent> => match name.as_str() {
     "String" => Type::String,
     "Bytes" => Type::Bytes,
     "Unit" => Type::Unit,
-    _ => Type::Var{name: name},
+    _ => Type::Var{name},
 };
 
 TypeExprList: Vec<Type> = {
