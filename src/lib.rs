@@ -146,4 +146,29 @@ mod tests {
             effects: EffectSet::from([Effect::Io, Effect::Net]),
         });
     }
+
+    #[test]
+    fn parses_the_act_effect_despite_act_also_being_a_cognitive_layer_keyword() {
+        // Regression test: `"act"` is ALSO a pre-existing literal keyword
+        // token (the cognitive-layer `act <intention>` rule). LALRPOP's
+        // lexer always prefers a literal-string token over a same-length
+        // regex token (Ident) for identical text, so `act` here would never
+        // reach `Ident`'s match arm — EffectName needs its own dedicated
+        // `"act" => Effect::Act` alternative, not just a match arm inside
+        // the Ident-routed one. If this test ever fails, that's very likely
+        // what regressed.
+        use aleph_syntax_tree::effects::{Effect, EffectSet};
+        let result = parse("fun f() -> Unit | act = { 1 }".to_string());
+        assert_eq!(result, at::WithEffects {
+            inner: Box::new(at::Typed {
+                inner: Box::new(at::LetRec {
+                    name: "f".to_string(),
+                    args: Vec::new(),
+                    body: Box::new(at::Int { value: "1".to_string() }),
+                }),
+                ty: Type::Fun { params: Vec::new(), ret: Box::new(Type::Unit) },
+            }),
+            effects: EffectSet::from([Effect::Act]),
+        });
+    }
 }
