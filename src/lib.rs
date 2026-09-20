@@ -179,6 +179,34 @@ mod tests {
     }
 
     #[test]
+    fn match_arrow_syntax_still_parses_despite_the_new_typed_function_arrow_token() {
+        // Regression test: this crate already had a `match e with : cond ->
+        // result :` syntax using `-` and `>` as two SEPARATE literal tokens.
+        // Adding a single `"->"` literal token for typed-function return
+        // types (0.2) means LALRPOP's lexer now always tokenizes an in-source
+        // `->` as that one token — the old MatchLine rule (still written as
+        // `"-" ">"`) silently stopped matching real `->` input entirely,
+        // breaking real-world .ale example files (aleph/test/dataset/ale/
+        // testMatch.ale) even though no unit test caught it. Fixed by
+        // updating MatchLine's own rule to expect the single "->" token
+        // (same surface syntax, no change for anyone writing Aleph code).
+        let result = parse("match x with : true -> 1: : false -> 0:".to_string());
+        assert_eq!(result, at::Match {
+            expr: Box::new(at::Ident { value: "x".to_string() }),
+            case_list: vec![
+                Box::new(at::MatchLine {
+                    condition: Box::new(at::Bool { value: "true".to_string() }),
+                    case_expr: Box::new(at::Int { value: "1".to_string() }),
+                }),
+                Box::new(at::MatchLine {
+                    condition: Box::new(at::Bool { value: "false".to_string() }),
+                    case_expr: Box::new(at::Int { value: "0".to_string() }),
+                }),
+            ],
+        });
+    }
+
+    #[test]
     fn parses_a_typed_function_with_multiple_typed_params() {
         let result = parse("fun add(a: Int, b: Int) -> Int = { a + b }".to_string());
         assert_eq!(result, at::Typed {

@@ -198,7 +198,14 @@ LeftAdd:(at, bool) = {
 
 MatchLine = {
     Ident,
-    ":" <left:Term> "-" ">" <right:Term> ":" => at::MatchLine{condition: Box::new(left), case_expr: Box::new(right)},
+    // Was `"-" ">"` (two separate literal tokens) until this grammar also
+    // introduced a single `"->"` literal token for typed-function return
+    // arrows (0.2). LALRPOP's lexer then always tokenizes an in-source `->`
+    // as that one token, never as adjacent `-` then `>` — so the old
+    // two-token form silently stopped matching real `->` input. Surface
+    // syntax is unchanged (still literally `->`); only the grammar rule's
+    // own token expectation needed to catch up to the lexer.
+    ":" <left:Term> "->" <right:Term> ":" => at::MatchLine{condition: Box::new(left), case_expr: Box::new(right)},
 }
 
 MatchList: Vec<Box<at>> = {
