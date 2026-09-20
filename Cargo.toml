@@ -21,5 +21,11 @@ regex = "1"
 aleph-syntax-tree = "0.2"
 
 [dev-dependencies]
-alegen = { version = "0.2", path = "../alegen" }
+# No `path`: this crate exists in more than one local clone location with
+# different relative layouts to `alegen` (some as a direct sibling, some
+# nested under filters/{parsers,generators}/) — a path override that's
+# correct in one breaks `cargo build`/`cargo test`/`cargo publish`'s verify
+# step in the other. Registry resolution works from any location once
+# alegen 0.2.0 is published (publish alegen first).
+alegen = "0.2"
 
