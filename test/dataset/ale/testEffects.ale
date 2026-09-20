@@ -1,0 +1,14 @@
+fun add(a: Int, b: Int) -> Int | pure = {
+    a + b
+};
+
+fun log(msg: String) -> Unit | io = {
+    print(msg)
+};
+
+fun main() -> Unit | io, net = {
+    log("starting")
+};
+
+log("computing");
+print(add(2, 3));

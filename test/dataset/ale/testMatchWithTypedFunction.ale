@@ -1,0 +1,7 @@
+fun to_int(flag: Bool) -> Int | pure = {
+    match flag with
+    : true -> 1:
+    : false -> 0:
+};
+
+print(to_int(true));

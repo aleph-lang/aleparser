@@ -1,0 +1,3 @@
+type Shape = Circle(Float) | Rect(Float, Float);
+
+type Bool2 = T | F

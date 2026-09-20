@@ -1,0 +1,17 @@
+type Shape = Circle(Float) | Rect(Float, Float);
+
+fun area_circle(r: Float) -> Float | pure = {
+    r * r
+};
+
+fun area_rect(w: Float, h: Float) -> Float | pure = {
+    w * h
+};
+
+fun describe(msg: String) -> Unit | io = {
+    print(msg)
+};
+
+describe("computing areas");
+print(area_circle(2.0));
+print(area_rect(3.0, 4.0));
