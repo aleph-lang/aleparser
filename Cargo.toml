@@ -20,3 +20,6 @@ lalrpop-util = {version = "0.22", features = ["lexer"]}
 regex = "1"
 aleph-syntax-tree = "0.2"
 
+[dev-dependencies]
+alegen = { path = "../alegen" }
+
