@@ -41,9 +41,16 @@ Let = {
         effects: effs,
     },
     "fun" <name:Ident> "(" <params:Params> ")" "->" <ret:TypeExpr> "|" <effs:EffectList> "=" "{" <body:Stmts> "}" => {
-        let param_types: Vec<Type> = params.iter().map(|p| match &**p {
-            at::Typed{ty, ..} => ty.clone(),
-            _ => Type::Var{name: "_".to_string()},
+        // Only the leading contiguous run of typed params — matches
+        // alegen's gen_params contract, where param_types's length is the
+        // signal for how many leading params are typed. An untyped param
+        // anywhere in the list stops collection at that point; there is no
+        // placeholder for "untyped mid-list" because none of Type's
+        // variants safely means that (Type::Var already means
+        // "unresolved/generic type reference", not "no annotation").
+        let param_types: Vec<Type> = params.iter().map_while(|p| match &**p {
+            at::Typed{ty, ..} => Some(ty.clone()),
+            _ => None,
         }).collect();
         at::WithEffects{
             inner: Box::new(at::Typed{
@@ -125,9 +132,11 @@ Expr = {
         ty: Type::Fun{params: Vec::new(), ret: Box::new(ret)},
     },
     "fun" <name:Ident> "(" <params:Params> ")" "->" <ret:TypeExpr> "=" "{" <body:Stmts> "}" => {
-        let param_types: Vec<Type> = params.iter().map(|p| match &**p {
-            at::Typed{ty, ..} => ty.clone(),
-            _ => Type::Var{name: "_".to_string()},
+        // See the with-effects variant of this production above for why
+        // this only collects the leading contiguous run of typed params.
+        let param_types: Vec<Type> = params.iter().map_while(|p| match &**p {
+            at::Typed{ty, ..} => Some(ty.clone()),
+            _ => None,
         }).collect();
         at::Typed{
             inner: Box::new(at::LetRec{name: name.to_string_value(), args: params, body: Box::new(body)}),
@@ -253,6 +262,14 @@ EffectName: Effect = {
         "io" => Effect::Io,
         "net" => Effect::Net,
         "mut" => Effect::Mut,
+        // Unlike TypeExpr (which degrades an unrecognized name to Type::Var),
+        // there is no safe "unknown effect" fallback: Effect is a small closed
+        // enum with no catch-all variant, and silently mapping a typo to e.g.
+        // Effect::Pure would misrepresent a function's actual effects, which is
+        // worse than failing loudly. This panics rather than propagating a
+        // proper parse error because this crate's `parse()` doesn't yet have
+        // fallible-action plumbing (LALRPOP's `=>?` productions) wired up —
+        // tracked as future work, not attempted here.
         other => panic!("unknown effect '{}'", other),
     },
     "act" => Effect::Act,

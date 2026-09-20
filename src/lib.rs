@@ -171,4 +171,54 @@ mod tests {
             effects: EffectSet::from([Effect::Act]),
         });
     }
+
+    #[test]
+    #[should_panic(expected = "unknown effect")]
+    fn unrecognized_effect_name_panics_rather_than_silently_misrepresenting_the_signature() {
+        parse("fun f() -> Unit | bogus = { 1 }".to_string());
+    }
+
+    #[test]
+    fn parses_a_typed_function_with_multiple_typed_params() {
+        let result = parse("fun add(a: Int, b: Int) -> Int = { a + b }".to_string());
+        assert_eq!(result, at::Typed {
+            inner: Box::new(at::LetRec {
+                name: "add".to_string(),
+                args: vec![
+                    Box::new(at::Typed { inner: Box::new(at::Ident { value: "a".to_string() }), ty: Type::Int }),
+                    Box::new(at::Typed { inner: Box::new(at::Ident { value: "b".to_string() }), ty: Type::Int }),
+                ],
+                body: Box::new(at::Add {
+                    number_expr1: Box::new(at::Ident { value: "a".to_string() }),
+                    number_expr2: Box::new(at::Ident { value: "b".to_string() }),
+                }),
+            }),
+            ty: Type::Fun { params: vec![Type::Int, Type::Int], ret: Box::new(Type::Int) },
+        });
+    }
+
+    #[test]
+    fn a_leading_untyped_param_stops_param_types_collection_even_if_later_params_are_typed() {
+        // Documents the Fix-1 behavior: param_types is the TYPED PREFIX
+        // only. Since `x` (the first param) has no annotation, param_types
+        // is empty — even though `y` right after it IS individually typed
+        // (y's own Typed{..} wrapping is still present in `args`, just not
+        // reflected in the aggregate Fun.params list). This is a deliberate,
+        // honest degrade, not a bug: alegen's gen_params will print `x, y:
+        // Int` for this — see aleparser's design note on gen_params for why
+        // there's no safe way to represent "untyped, then typed" any other
+        // way without a placeholder that would itself be misleading.
+        let result = parse("fun f(x, y: Int) -> Int = { x }".to_string());
+        assert_eq!(result, at::Typed {
+            inner: Box::new(at::LetRec {
+                name: "f".to_string(),
+                args: vec![
+                    Box::new(at::Ident { value: "x".to_string() }),
+                    Box::new(at::Typed { inner: Box::new(at::Ident { value: "y".to_string() }), ty: Type::Int }),
+                ],
+                body: Box::new(at::Ident { value: "x".to_string() }),
+            }),
+            ty: Type::Fun { params: Vec::new(), ret: Box::new(Type::Int) },
+        });
+    }
 }
